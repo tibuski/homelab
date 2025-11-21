@@ -1,7 +1,8 @@
-#!/bin/bash
+#!/bin/sh
 
-# Prerequisites installation script for kubectl, talosctl, and kind
+# Prerequisites installation script for kubectl, talosctl, clusterctl, and kind
 # Supports Arch Linux, Debian, and Alpine Linux
+# POSIX compliant
 
 set -e
 
@@ -59,20 +60,19 @@ command_exists() {
 
 # Function to ask for user confirmation
 confirm_installation() {
-    local tool=$1
+    tool="$1"
     echo
-    read -p "Do you want to install $tool? [y/N]: " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        return 0
-    else
-        return 1
-    fi
+    printf "Do you want to install %s? [y/N]: " "$tool"
+    read -r REPLY
+    case "$REPLY" in
+        [Yy]|[Yy][Ee][Ss]) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 # Function to install kubectl
 install_kubectl() {
-    local distro=$1
+    distro="$1"
     
     print_info "Installing kubectl..."
     
@@ -104,7 +104,7 @@ install_kubectl() {
 
 # Function to install talosctl
 install_talosctl() {
-    local distro=$1
+    distro="$1"
     
     print_info "Installing talosctl..."
     
@@ -161,7 +161,7 @@ install_talosctl_binary() {
 
 # Function to install kind
 install_kind() {
-    local distro=$1
+    distro="$1"
     
     print_info "Installing kind..."
     
@@ -230,7 +230,7 @@ install_kind() {
 
 # Function to install clusterctl
 install_clusterctl() {
-    local distro=$1
+    distro="$1"
     
     print_info "Installing clusterctl..."
     
@@ -301,9 +301,9 @@ check_docker() {
         else
             print_warning "Docker is installed but not running."
             echo
-            read -p "Do you want to start Docker? [y/N]: " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
+            printf "Do you want to start Docker? [y/N]: "
+            read -r REPLY
+            if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ] || [ "$REPLY" = "yes" ] || [ "$REPLY" = "YES" ]; then
                 print_info "Starting Docker..."
                 
                 # Try to start Docker with systemctl
@@ -342,9 +342,9 @@ check_docker() {
         else
             print_warning "User is not in docker group."
             echo
-            read -p "Do you want to add current user to docker group? [y/N]: " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
+            printf "Do you want to add current user to docker group? [y/N]: "
+            read -r REPLY
+            if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ] || [ "$REPLY" = "yes" ] || [ "$REPLY" = "YES" ]; then
                 print_info "Adding user to docker group..."
                 sudo usermod -aG docker "$USER"
                 print_warning "Please log out and log back in for group changes to take effect"

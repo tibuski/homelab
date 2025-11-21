@@ -1,0 +1,106 @@
+#!/bin/sh
+
+#!/bin/sh
+
+# Prepare Proxmox Secrets and templates for Talos and Kubernetes deployment
+# POSIX compliant
+#
+# PREREQUISITES:
+# - Talos ISO must be present in Proxmox ISO storage
+# - Download Talos ISO from: https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=metal&target=metal
+# - Upload the ISO to your Proxmox storage (e.g., Data storage)
+# - Update TALOS_ISO_PATH variable in 0-Homelab.conf to match your storage path
+
+set -e
+
+# Source shared configuration
+if [ -f "./0-Homelab.conf" ]; then
+    . ./0-Homelab.conf
+else
+    printf "\033[0;31m[ERROR]\033[0m Configuration file 0-Homelab.conf not found!\n"
+    printf "Please ensure 0-Homelab.conf is in the same directory as this script.\n"
+    exit 1
+fi
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_info() {
+    printf "${BLUE}[INFO]${NC} %s\n" "$1"
+}
+
+print_warning() {
+    printf "${YELLOW}[WARNING]${NC} %s\n" "$1"
+}
+
+print_success() {
+    printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"
+}
+
+# Display prerequisites
+print_info "Prerequisites Check:"
+print_warning "Talos ISO must be present in Proxmox ISO storage"
+print_info "Download from: https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=metal&target=metal"
+print_info "Upload the ISO to your Proxmox storage and update TALOS_ISO_PATH in 0-Homelab.conf"
+echo
+
+print_info "Using configuration from 0-Homelab.conf"
+print_info "Proxmox Host: ${PROXMOX_HOST}:${PROXMOX_PORT}"
+print_info "Template VMID: ${TEMPLATE_VMID}"
+print_info "Talos ISO Path: ${TALOS_ISO_PATH}"
+echo
+
+# ===============================================================================
+# VM TEMPLATE CREATION ON PROXMOX
+# ===============================================================================
+
+print_info "Creating Talos VM template on Proxmox host ${PROXMOX_HOST}..."
+
+# Check if template already exists
+if ssh root@"${PROXMOX_HOST}" "qm status ${TEMPLATE_VMID} >/dev/null 2>&1"; then
+    print_success "Template VM ${TEMPLATE_VMID} already exists. Skipping creation."
+else
+    print_info "Creating new VM template ${TEMPLATE_VMID}..."
+    
+    # Create VM and configure it in a single SSH session
+    ssh root@"${PROXMOX_HOST}" << PROXMOX_COMMANDS
+        # Create VM
+        qm create ${TEMPLATE_VMID} \
+            --name "${TEMPLATE_NAME}" \
+            --memory ${TEMPLATE_MEMORY} \
+            --cores ${TEMPLATE_CORES} \
+            --net0 virtio,bridge=${TEMPLATE_BRIDGE}
+        
+        # Configure storage and boot
+        qm set ${TEMPLATE_VMID} \
+            --scsi0 ${TEMPLATE_STORAGE}:${TEMPLATE_DISK_SIZE} \
+            --boot order=scsi0 \
+            --scsihw virtio-scsi-single
+        
+        # Attach Talos ISO
+        qm set ${TEMPLATE_VMID} \
+            --ide2 ${TALOS_ISO_PATH},media=cdrom
+        
+        # Enable QEMU guest agent
+        qm set ${TEMPLATE_VMID} \
+            --agent enabled=1
+        
+        # Add tags to template
+        qm set ${TEMPLATE_VMID} \
+            --tags cluster-api-talos
+        
+        # Convert to template
+        qm template ${TEMPLATE_VMID}
+        
+        echo "Template ${TEMPLATE_VMID} created successfully"
+PROXMOX_COMMANDS
+    
+    print_success "Talos VM template creation completed."
+fi
+
+print_success "Proxmox preparation completed successfully!"

@@ -14,6 +14,7 @@ The first script in the series that installs essential tools and verifies Docker
 - **Installs kubectl** - Kubernetes command-line tool
 - **Installs talosctl** - Talos Linux management tool  
 - **Installs kind** - Kubernetes in Docker (for local development)
+- **Installs clusterctl** - Cluster API management tool
 - **Checks Docker status** - Verifies installation and starts service if needed
 
 ### Supported Distributions:

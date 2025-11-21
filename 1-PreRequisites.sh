@@ -228,6 +228,66 @@ install_kind() {
     print_success "kind installed successfully"
 }
 
+# Function to install clusterctl
+install_clusterctl() {
+    local distro=$1
+    
+    print_info "Installing clusterctl..."
+    
+    case "$distro" in
+        arch)
+            # Try AUR first, then fallback to binary download
+            if command_exists yay; then
+                yay -S clusterctl-bin
+            elif command_exists paru; then
+                paru -S clusterctl-bin
+            else
+                # Download binary directly for Arch
+                if confirm_installation "clusterctl binary"; then
+                    install_clusterctl_binary
+                else
+                    print_warning "Skipping clusterctl binary installation"
+                    return 1
+                fi
+            fi
+            ;;
+        debian|alpine)
+            # Download binary directly for Debian and Alpine
+            if confirm_installation "clusterctl binary"; then
+                install_clusterctl_binary
+            else
+                print_warning "Skipping clusterctl binary installation"
+                return 1
+            fi
+            ;;
+    esac
+    
+    print_success "clusterctl installed successfully"
+}
+
+# Function to install clusterctl binary
+install_clusterctl_binary() {
+    if ! command_exists curl; then
+        case "$(detect_distro)" in
+            debian)
+                sudo apt-get update && sudo apt-get install -y curl
+                ;;
+            alpine)
+                sudo apk add curl
+                ;;
+            arch)
+                sudo pacman -S curl
+                ;;
+        esac
+    fi
+    
+    # Get the latest version and download
+    CLUSTERCTL_VERSION=$(curl -s https://api.github.com/repos/kubernetes-sigs/cluster-api/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+    curl -Lo clusterctl https://github.com/kubernetes-sigs/cluster-api/releases/download/${CLUSTERCTL_VERSION}/clusterctl-linux-amd64
+    chmod +x clusterctl
+    sudo mv clusterctl /usr/local/bin/
+}
+
 # Function to check and manage Docker
 check_docker() {
     print_info "Checking Docker installation..."
@@ -349,6 +409,12 @@ main() {
         print_success "kind is already installed"
     fi
     
+    if ! command_exists clusterctl; then
+        install_clusterctl "$DISTRO" || print_warning "clusterctl installation failed or was skipped"
+    else
+        print_success "clusterctl is already installed"
+    fi
+    
     # Check Docker
     check_docker
     
@@ -365,6 +431,9 @@ main() {
     fi
     if command_exists kind; then
         echo -e "${GREEN}kind${NC}: $(kind version 2>/dev/null || echo 'version check failed')"
+    fi
+    if command_exists clusterctl; then
+        echo -e "${GREEN}clusterctl${NC}: $(clusterctl version 2>/dev/null | grep 'GitVersion:' | sed 's/.*GitVersion:"\([^"]*\)".*/\1/' || echo 'version check failed')"
     fi
     if command_exists docker; then
         echo -e "${GREEN}docker${NC}: $(docker --version 2>/dev/null || echo 'version check failed')"

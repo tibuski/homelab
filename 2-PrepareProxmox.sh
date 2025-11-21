@@ -51,8 +51,75 @@ echo
 
 print_info "Using configuration from 0-Homelab.conf"
 print_info "Proxmox Host: ${PROXMOX_HOST}:${PROXMOX_PORT}"
+print_info "Starting Proxmox preparation..."
 print_info "Template VMID: ${TEMPLATE_VMID}"
 print_info "Talos ISO Path: ${TALOS_ISO_PATH}"
+echo
+
+# ===============================================================================
+# PROXMOX USER AND TOKEN SETUP
+# ===============================================================================
+
+print_info "Checking Proxmox API user and token..."
+
+# Set default user if empty
+if [ -z "${PROXMOX_USER}" ]; then
+    PROXMOX_USER="capi"
+fi
+
+# Construct full user (add @pve if not present)
+PROXMOX_FULL_USER="${PROXMOX_USER}@pve"
+
+# Check if user exists and create if needed
+if ! ssh root@"${PROXMOX_HOST}" "pveum user list | grep -q '${PROXMOX_FULL_USER}'"; then
+    print_info "Creating Proxmox user ${PROXMOX_FULL_USER}..."
+    ssh root@"${PROXMOX_HOST}" << PROXMOX_USER_SETUP
+        # Create user
+        pveum user add ${PROXMOX_FULL_USER}
+        
+        # Add PVEAdmin role
+        pveum aclmod / -user ${PROXMOX_FULL_USER} -role PVEAdmin
+        
+        # Create API token
+        echo "Creating API token..."
+        pveum user token add ${PROXMOX_FULL_USER} ${PROXMOX_TOKEN_NAME} -privsep 0
+        echo "============================================"
+PROXMOX_USER_SETUP
+    
+    print_success "Proxmox user and token created successfully"
+    echo
+    print_warning "REQUIRED ACTION:"
+    print_warning "1. Copy the token secret from above"
+    print_warning "2. Update PROXMOX_SECRET (Value in the table above) in 0-Homelab.conf with the copied secret"
+    print_warning "3. Run this script again to continue"
+    print_warning "The secret will not be shown again!"
+    echo
+    exit 0
+else
+    print_success "Proxmox user ${PROXMOX_FULL_USER} already exists"
+    
+    # Check if token exists
+    if ! ssh root@"${PROXMOX_HOST}" "pveum user token list ${PROXMOX_FULL_USER} 2>/dev/null | grep -q '${PROXMOX_TOKEN_NAME}'"; then
+        print_info "Creating API token for user ${PROXMOX_FULL_USER}..."
+        ssh root@"${PROXMOX_HOST}" << TOKEN_CREATE
+            echo "============================================"
+            echo "Creating API token..."
+            pveum user token add ${PROXMOX_FULL_USER} ${PROXMOX_TOKEN_NAME} -privsep 0
+            echo "============================================"
+TOKEN_CREATE
+        print_success "API token created successfully"
+        echo
+        print_warning "REQUIRED ACTION:"
+        print_warning "1. Copy the token secret from above"
+        print_warning "2. Update PROXMOX_SECRET in 0-Homelab.conf with the copied secret"
+        print_warning "3. Run this script again to continue"
+        print_warning "The secret will not be shown again!"
+        echo
+        exit 0
+    else
+        print_success "API token ${PROXMOX_TOKEN_NAME} already exists for user ${PROXMOX_FULL_USER}"
+    fi
+fi
 echo
 
 # ===============================================================================

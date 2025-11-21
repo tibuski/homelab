@@ -34,17 +34,21 @@ print_info "Management Cluster: ${MANAGEMENT_CLUSTER_NAME}"
 print_info "Control Plane Endpoint: ${CONTROL_PLANE_ENDPOINT_IP}"
 echo
 
-# Create management cluster
+# ===============================================================================
+# VM TEMPLATE CREATION ON PROXMOX
+# ===============================================================================
+
+# Create temporary local management cluster
 kind create cluster --name "${MANAGEMENT_CLUSTER_NAME}"
 
 # Create talos-builder namespace
 kubectl create namespace "${TALOS_NAMESPACE}"
 
 # Create clusterctl configuration directory if it doesn't exist
-mkdir -p "$(dirname "${CLUSTERCTL_CONFIG_PATH}")"
+mkdir -p "${CLUSTERCTL_CONFIG_PATH}"
 
-# Create clusterctl configuration for Proxmox
-cat <<EOF > "${CLUSTERCTL_CONFIG_PATH}"
+# Create clusterctl configuration for Proxmox Provider
+cat <<EOF > "${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE}"
 # Proxmox provider configuration
 PROXMOX_URL: "https://${PROXMOX_HOST}:${PROXMOX_PORT}"
 PROXMOX_TOKEN: "${PROXMOX_TOKEN}"

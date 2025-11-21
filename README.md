@@ -1,23 +1,48 @@
 # Homelab K8s Environment
 
-Automated scripts to build a complete Kubernetes environment on Proxmox using Cluster API.
+Automated scripts to build a Kubernetes cluster on Proxmox using Cluster API and Talos.
 
-## Overview
+## Scripts
 
-This repository contains a series of scripts designed to set up a production-ready Kubernetes cluster from scratch on Proxmox infrastructure using Cluster API. The scripts are numbered in execution order.
+### 0-Homelab.conf
+Configuration file with all variables. Edit this first.
 
-## 1-PreRequisites.sh
+### 1-PreRequisites.sh
+Installs tools: kubectl, talosctl, kind, clusterctl. Checks Docker status.
 
-The first script in the series that installs essential tools and verifies Docker status.
+**Supported OS:** Arch Linux, Debian/Ubuntu, Alpine Linux
 
-### What it does:
-- **Installs kubectl** - Kubernetes command-line tool
-- **Installs talosctl** - Talos Linux management tool  
-- **Installs kind** - Kubernetes in Docker (for local development)
-- **Installs clusterctl** - Cluster API management tool
-- **Checks Docker status** - Verifies installation and starts service if needed
+```bash
+./1-PreRequisites.sh
+```
 
-### Supported Distributions:
-- Arch Linux (including Manjaro)
-- Debian (including Ubuntu)
-- Alpine Linux
+### 2-PrepareProxmox.sh
+Creates Talos VM template on Proxmox server.
+
+**Prerequisites:** 
+- Download Talos ISO from [factory.talos.dev](https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=metal&target=metal)
+- Upload ISO to Proxmox storage
+- SSH key access to Proxmox root
+
+```bash
+./2-PrepareProxmox.sh
+```
+
+### 3-ClusterAPI.sh
+Sets up Cluster API management cluster and deploys Talos Kubernetes cluster.
+
+```bash
+./3-ClusterAPI.sh
+```
+
+## Quick Start
+
+1. Edit `0-Homelab.conf` with your settings
+2. Run scripts in order: `./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-ClusterAPI.sh`
+
+## Requirements
+
+- Linux (Arch/Debian/Alpine)
+- sudo access
+- Docker
+- Proxmox server with SSH access

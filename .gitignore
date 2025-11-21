@@ -1,0 +1,11 @@
+# Configuration files with sensitive data
+*.yaml
+*.yml
+
+# Cluster API and Kubernetes config files
+clusterctl.yaml
+kubeconfig*
+
+# Temporary files
+*.tmp
+*.log

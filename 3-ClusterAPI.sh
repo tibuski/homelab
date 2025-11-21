@@ -39,28 +39,256 @@ echo
 # ===============================================================================
 
 # Create temporary local management cluster
-kind create cluster --name "${MANAGEMENT_CLUSTER_NAME}"
+if ! kind get clusters | grep -q "^${MANAGEMENT_CLUSTER_NAME}$"; then
+    print_info "Creating kind management cluster: ${MANAGEMENT_CLUSTER_NAME}"
+    kind create cluster --name "${MANAGEMENT_CLUSTER_NAME}"
+    kubectl cluster-info --context kind-management
+else
+    print_info "Kind cluster '${MANAGEMENT_CLUSTER_NAME}' already exists, skipping creation"
+    kubectl cluster-info --context kind-management
+fi
 
 # Create talos-builder namespace
-kubectl create namespace "${TALOS_NAMESPACE}"
+if ! kubectl get namespace "${TALOS_NAMESPACE}" >/dev/null 2>&1; then
+    print_info "Creating namespace: ${TALOS_NAMESPACE}"
+    kubectl create namespace "${TALOS_NAMESPACE}"
+else
+    print_info "Namespace '${TALOS_NAMESPACE}' already exists, skipping creation"
+fi
 
 # Create clusterctl configuration directory if it doesn't exist
 mkdir -p "${CLUSTERCTL_CONFIG_PATH}"
 
-# Create clusterctl configuration for Proxmox Provider
+# Create CAPI configuration for Proxmox Provider
 cat <<EOF > "${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE}"
+# Providers
+providers:
+  - name: "talos"
+    url: "https://github.com/siderolabs/cluster-api-bootstrap-provider-talos/releases/download/v0.6.10/bootstrap-components.yaml"
+    type: "BootstrapProvider"
+  - name: "talos"
+    url: "https://github.com/siderolabs/cluster-api-control-plane-provider-talos/releases/download/v0.5.11/control-plane-components.yaml"
+    type: "ControlPlaneProvider"
+  - name: "proxmox"
+    url: "https://github.com/ionos-cloud/cluster-api-provider-proxmox/releases/download/v0.7.5/infrastructure-components.yaml"
+    type: "InfrastructureProvider"
+
 # Proxmox provider configuration
 PROXMOX_URL: "https://${PROXMOX_HOST}:${PROXMOX_PORT}"
 PROXMOX_TOKEN: "${PROXMOX_TOKEN}"
 PROXMOX_SECRET: "${PROXMOX_SECRET}"
-
-# Image and template settings
-PROXMOX_SOURCENODE: "${PROXMOX_SOURCENODE}"
-TEMPLATE_VMID: "${TEMPLATE_VMID}"
-
-# Network configuration
-CONTROL_PLANE_ENDPOINT_IP: "${CONTROL_PLANE_ENDPOINT_IP}"
-GATEWAY: "${GATEWAY}"
-IP_PREFIX: "${IP_PREFIX}"
-DNS_SERVERS: "${DNS_SERVERS}"
 EOF
+
+# Initialize CAPI with Proxmox, Talos providers and IPAM in-cluster
+clusterctl init \
+  --infrastructure proxmox \
+  --bootstrap talos \
+  --control-plane talos \
+  --ipam in-cluster
+
+# Verify CAPI installation
+print_info "Verifying Cluster API provider installation..."
+print_info "You should see pods running for:"
+print_info "  • capi-system"
+print_info "  • capmox-system (Proxmox provider)"
+print_info "  • cabpt-system (Talos bootstrap)"
+print_info "  • cacppt-system (Talos control plane)"
+echo
+kubectl get pods -A
+
+# Create kubectl configurations directory
+mkdir -p "${KUBECTL_CONFIG_PATH}"
+
+# Note: Proxmox provider handles IP allocation through ProxmoxCluster spec
+# No separate IP pool resource needed
+
+# Create Talos cluster YAML configuration
+CLUSTER_FILE="${KUBECTL_CONFIG_PATH}/${CLUSTER_NAME}-cluster.yaml"
+print_info "Creating Talos cluster configuration: ${CLUSTER_FILE}"
+cat <<EOF > "${CLUSTER_FILE}"
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: ${CLUSTER_NAMESPACE}
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - ${POD_CIDR}
+    services:
+      cidrBlocks:
+        - ${SERVICE_CIDR}
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: TalosControlPlane
+    name: talos-control-plane
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ProxmoxCluster
+    name: ${PROXMOX_CLUSTER_NAME}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ProxmoxCluster
+metadata:
+  name: ${PROXMOX_CLUSTER_NAME}
+  namespace: ${CLUSTER_NAMESPACE}
+spec:
+  controlPlaneEndpoint:
+    host: ${CONTROL_PLANE_ENDPOINT_IP}
+    port: 6443
+  allowedNodes:
+    - ${PROXMOX_SOURCENODE}
+  ipv4Config:
+    addresses:
+      - ${IP_POOL_START}-${IP_POOL_END}
+    prefix: ${IP_PREFIX}
+    gateway: ${GATEWAY}
+  dnsServers:
+    - ${DNS_SERVERS}
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+kind: TalosControlPlane
+metadata:
+  name: talos-control-plane
+spec:
+  version: ${KUBERNETES_VERSION}
+  replicas: ${CONTROL_PLANE_REPLICAS}
+  infrastructureTemplate:
+    kind: ProxmoxMachineTemplate
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+    name: control-plane-template
+    namespace: ${CLUSTER_NAMESPACE}
+  controlPlaneConfig:
+    controlplane:
+      generateType: controlplane
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ProxmoxMachineTemplate
+metadata:
+  name: control-plane-template
+  namespace: ${CLUSTER_NAMESPACE}
+spec:
+  template:
+    spec:
+      disks:
+        bootVolume:
+          disk: ${TEMPLATE_DISK}
+          sizeGb: ${TEMPLATE_DISK_SIZE}
+      format: qcow2
+      full: true
+      memoryMiB: ${TEMPLATE_MEMORY}
+      network:
+        default:
+          bridge: vmbr0
+          model: virtio
+      numCores: ${TEMPLATE_CORES}
+      numSockets: ${TEMPLATE_SOCKETS} 
+      sourceNode: ${PROXMOX_SOURCENODE}
+      templateID: ${TEMPLATE_VMID}
+      
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: MachineDeployment
+metadata:
+  name: ${CLUSTER_NAME}-workers
+  namespace: ${CLUSTER_NAMESPACE}
+spec:
+  clusterName: ${CLUSTER_NAME}
+  replicas: ${WORKER_REPLICAS}
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/deployment-name: ${CLUSTER_NAME}-workers
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/deployment-name: ${CLUSTER_NAME}-workers
+    spec:
+      clusterName: ${CLUSTER_NAME}
+      version: ${KUBERNETES_VERSION}
+      bootstrap:
+        configRef:
+          apiGroup: bootstrap.cluster.x-k8s.io
+          kind: TalosConfigTemplate
+          name: ${CLUSTER_NAME}-workers
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: ProxmoxMachineTemplate
+        name: ${CLUSTER_NAME}-workers
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ProxmoxMachineTemplate
+metadata:
+  name: ${CLUSTER_NAME}-workers
+  namespace: ${CLUSTER_NAMESPACE}
+spec:
+  template:
+    spec:
+      sourceNode: ${PROXMOX_SOURCENODE}
+      templateID: ${TEMPLATE_VMID}
+      format: qcow2
+      full: true
+      numCores: ${TEMPLATE_CORES}
+      memoryMiB: ${TEMPLATE_MEMORY}
+      disks:
+        bootVolume:
+          disk: ${PROXMOX_SOURCENODE}:${TEMPLATE_VMID}
+          sizeGb: ${TEMPLATE_DISK_SIZE}
+      network:
+        default:
+          bridge: vmbr0
+          model: virtio
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+kind: TalosConfigTemplate
+metadata:
+  name: ${CLUSTER_NAME}-workers
+  namespace: ${CLUSTER_NAMESPACE}
+spec:
+  template:
+    spec:
+      generateType: worker
+      configPatches:
+        - op: add
+          path: /machine/kubelet/extraArgs
+          value:
+            rotate-server-certificates: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${CLUSTER_NAME}-credentials
+  namespace: ${CLUSTER_NAMESPACE}
+  labels:
+    platform.ionos.com/secret-type: "proxmox-credentials"
+type: Opaque
+stringData:
+  token: "${PROXMOX_TOKEN}"
+  secret: "${PROXMOX_SECRET}"
+  url: "https://${PROXMOX_HOST}:${PROXMOX_PORT}"
+EOF
+
+print_success "Cluster YAML files created successfully!"
+print_info "Generated files:"
+print_info "  • ${CLUSTER_FILE}"
+echo
+
+# Check if cluster already exists and needs cleanup
+if kubectl get cluster "${CLUSTER_NAME}" -n "${CLUSTER_NAMESPACE}" >/dev/null 2>&1; then
+    print_info "Existing cluster found. Cleaning up to avoid conflicts..."
+    kubectl delete cluster "${CLUSTER_NAME}" -n "${CLUSTER_NAMESPACE}" --wait=false || true
+    kubectl delete proxmoxcluster "${CLUSTER_NAME}" -n "${CLUSTER_NAMESPACE}" --wait=false || true
+    kubectl delete machinedeployment "${CLUSTER_NAME}-workers" -n "${CLUSTER_NAMESPACE}" --wait=false || true
+    kubectl delete taloscontrolplane "${CLUSTER_NAME}-control-plane" -n "${CLUSTER_NAMESPACE}" --wait=false || true
+    kubectl delete proxmoxmachinetemplate "${CLUSTER_NAME}-control-plane" -n "${CLUSTER_NAMESPACE}" --wait=false || true
+    kubectl delete proxmoxmachinetemplate "${CLUSTER_NAME}-workers" -n "${CLUSTER_NAMESPACE}" --wait=false || true
+    kubectl delete talosconfigtemplate "${CLUSTER_NAME}-workers" -n "${CLUSTER_NAMESPACE}" --wait=false || true
+    kubectl delete secret "${CLUSTER_NAME}-credentials" -n "${CLUSTER_NAMESPACE}" --wait=false || true
+    print_info "Waiting for cleanup to complete..."
+    sleep 10
+fi
+
+# Apply all kubectl configurations from the dedicated directory
+print_info "Applying all Kubernetes configurations from ${KUBECTL_CONFIG_PATH}..."
+kubectl apply -f "${KUBECTL_CONFIG_PATH}"

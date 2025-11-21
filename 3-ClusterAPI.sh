@@ -48,14 +48,6 @@ else
     kubectl cluster-info --context kind-management
 fi
 
-# Create talos-builder namespace
-if ! kubectl get namespace "${TALOS_NAMESPACE}" >/dev/null 2>&1; then
-    print_info "Creating namespace: ${TALOS_NAMESPACE}"
-    kubectl create namespace "${TALOS_NAMESPACE}"
-else
-    print_info "Namespace '${TALOS_NAMESPACE}' already exists, skipping creation"
-fi
-
 # Create clusterctl configuration directory if it doesn't exist
 mkdir -p "${CLUSTERCTL_CONFIG_PATH}"
 
@@ -64,23 +56,25 @@ cat <<EOF > "${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE}"
 # Providers
 providers:
   - name: "talos"
-    url: "https://github.com/siderolabs/cluster-api-bootstrap-provider-talos/releases/download/v0.6.10/bootstrap-components.yaml"
+    url: "${TALOS_BOOTSTRAP_PROVIDER_URL}"
     type: "BootstrapProvider"
   - name: "talos"
-    url: "https://github.com/siderolabs/cluster-api-control-plane-provider-talos/releases/download/v0.5.11/control-plane-components.yaml"
+    url: "${TALOS_CONTROL_PLANE_PROVIDER_URL}"
     type: "ControlPlaneProvider"
   - name: "proxmox"
-    url: "https://github.com/ionos-cloud/cluster-api-provider-proxmox/releases/download/v0.7.5/infrastructure-components.yaml"
+    url: "${PROXMOX_INFRASTRUCTURE_PROVIDER_URL}"
     type: "InfrastructureProvider"
 
 # Proxmox provider configuration
 PROXMOX_URL: "https://${PROXMOX_HOST}:${PROXMOX_PORT}"
 PROXMOX_TOKEN: "${PROXMOX_TOKEN}"
 PROXMOX_SECRET: "${PROXMOX_SECRET}"
+CLUSTERCTL_LOG_LEVEL: "4"
 EOF
 
 # Initialize CAPI with Proxmox, Talos providers and IPAM in-cluster
 clusterctl init \
+  --config ${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE} \
   --infrastructure proxmox \
   --bootstrap talos \
   --control-plane talos \

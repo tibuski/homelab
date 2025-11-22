@@ -29,6 +29,14 @@ print_success() {
     printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"
 }
 
+print_warning() {
+    printf "${YELLOW}[WARNING]${NC} %s\n" "$1"
+}
+
+print_error() {
+    printf "${RED}[ERROR]${NC} %s\n" "$1"
+}
+
 print_info "Using configuration from 0-Homelab.conf"
 print_info "Management Cluster: ${MANAGEMENT_CLUSTER_NAME}"
 print_info "Control Plane Endpoint: ${CONTROL_PLANE_ENDPOINT_IP}"
@@ -170,6 +178,9 @@ spec:
       templateID: ${TEMPLATE_VMID}
       checks:
           skipCloudInitStatus: true
+          skipQemuGuestAgent: true
+      metadataSettings:
+          providerIDInjection: true
       
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
@@ -268,26 +279,75 @@ clusterctl init \
   --control-plane talos \
   --ipam in-cluster
 
+# Wait for all pods to be in Running state before proceeding
 echo
-kubectl get pods -A
+print_info "Waiting for all pods to be in Running state..."
+while true; do
+    # Get pods that are not in Running, Succeeded, or Completed state
+    non_ready_pods=$(kubectl get pods -A --no-headers | grep -v -E "(Running|Succeeded|Completed)" | wc -l)
+    
+    if [ "$non_ready_pods" -eq 0 ]; then
+        print_success "All pods are now in Running state"
+        break
+    else
+        print_info "Waiting for $non_ready_pods pod(s) to be ready..."
+        sleep 5
+    fi
+done
 
+# Wait for webhook services to be ready (simplified check)
+echo
+print_info "Waiting for Cluster API controllers to be ready..."
 
+# Simple wait - just give the controllers some time to initialize
+sleep 30
 
-# Check if cluster already exists and needs cleanup
-if kubectl get cluster "${CLUSTER_NAME}" -n "${CLUSTER_NAMESPACE}" >/dev/null 2>&1; then
-    print_info "Existing cluster found. Cleaning up to avoid conflicts..."
-    kubectl delete cluster "${CLUSTER_NAME}" -n "${CLUSTER_NAMESPACE}" --wait=false || true
-    kubectl delete proxmoxcluster "${CLUSTER_NAME}" -n "${CLUSTER_NAMESPACE}" --wait=false || true
-    kubectl delete machinedeployment "${CLUSTER_NAME}-workers" -n "${CLUSTER_NAMESPACE}" --wait=false || true
-    kubectl delete taloscontrolplane "${CLUSTER_NAME}-control-plane" -n "${CLUSTER_NAMESPACE}" --wait=false || true
-    kubectl delete proxmoxmachinetemplate "${CLUSTER_NAME}-control-plane" -n "${CLUSTER_NAMESPACE}" --wait=false || true
-    kubectl delete proxmoxmachinetemplate "${CLUSTER_NAME}-workers" -n "${CLUSTER_NAMESPACE}" --wait=false || true
-    kubectl delete talosconfigtemplate "${CLUSTER_NAME}-workers" -n "${CLUSTER_NAMESPACE}" --wait=false || true
-    kubectl delete secret "${CLUSTER_NAME}-credentials" -n "${CLUSTER_NAMESPACE}" --wait=false || true
-    print_info "Waiting for cleanup to complete..."
-    sleep 10
+# Check if basic cluster API resources are available
+if kubectl api-resources | grep -q "clusters.cluster.x-k8s.io" >/dev/null 2>&1; then
+    print_success "Cluster API resources are available"
+else
+    print_warning "Cluster API resources not fully ready, but proceeding..."
 fi
 
-# Apply all kubectl configurations from the dedicated directory
+# Apply all kubectl configurations from the dedicated directory with retry logic
+echo
 print_info "Applying all Kubernetes configurations from ${KUBECTL_CONFIG_PATH}..."
-kubectl apply -f "${KUBECTL_CONFIG_PATH}"
+
+apply_success=false
+max_apply_attempts=5
+apply_attempt=0
+
+while [ "$apply_success" = false ] && [ "$apply_attempt" -lt "$max_apply_attempts" ]; do
+    apply_attempt=$((apply_attempt + 1))
+    
+    if [ "$apply_attempt" -gt 1 ]; then
+        print_info "Retrying kubectl apply (attempt $apply_attempt/$max_apply_attempts)..."
+        # Wait a bit longer between retries to allow webhook to fully initialize
+        sleep 10
+    fi
+    
+    if kubectl apply -f "${KUBECTL_CONFIG_PATH}" --request-timeout=${KUBECTL_APPLY_TIMEOUT} 2>/tmp/kubectl_apply_error.log; then
+        print_success "Successfully applied all Kubernetes configurations"
+        apply_success=true
+    else
+        # Check if the error is specifically about webhook connection
+        if grep -q "connect: connection refused" /tmp/kubectl_apply_error.log 2>/dev/null; then
+            print_warning "Webhook connection refused, waiting for webhook to be fully ready..."
+            if [ "$apply_attempt" -lt "$max_apply_attempts" ]; then
+                print_info "Will retry in 10 seconds..."
+            fi
+        else
+            print_error "kubectl apply failed with a different error:"
+            cat /tmp/kubectl_apply_error.log 2>/dev/null || echo "Could not read error log"
+            break
+        fi
+    fi
+done
+
+# Clean up temporary error log
+rm -f /tmp/kubectl_apply_error.log
+
+if [ "$apply_success" = false ]; then
+    print_error "Failed to apply configurations after $max_apply_attempts attempts"
+    exit 1
+fi

@@ -2,6 +2,13 @@
 
 Automated POSIX shell scripts to deploy a Kubernetes cluster on Proxmox using Cluster API and Talos Linux.
 
+## Quick Deploy
+
+Clean setup and deploy in one command:
+```bash
+./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-ClusterAPI.sh
+```
+
 ## Prerequisites
 
 - Linux system (Arch, Debian/Ubuntu, or Alpine)
@@ -43,12 +50,13 @@ Deploys Kubernetes cluster:
 - Sets up Cluster API management cluster
 - Deploys Talos Kubernetes cluster on Proxmox
 
-### 99-CleanProxmox.sh
-Cleanup utility for Proxmox resources:
-- **Smart Detection**: Finds VMs/templates by configured tag
-- **Safe Cleanup**: Interactive confirmation with force mode support
-- **Complete Removal**: Purges from job configurations and destroys unreferenced disks
-- **Batch Operations**: Handles multiple resources efficiently
+### 99-CleanAll.sh
+Comprehensive cleanup utility for complete environment reset:
+- **Clusterctl Cleanup**: Removes all clusterctl-managed clusters
+- **Kind Cleanup**: Deletes all local kind clusters
+- **Proxmox Cleanup**: Removes VMs/templates by configured tag
+- **Safe Operations**: Interactive confirmation with force mode support
+- **Complete Removal**: Purges configurations and unreferenced disks
 
 ## Quick Start
 
@@ -68,25 +76,56 @@ Cleanup utility for Proxmox resources:
    nano 0-Homelab.conf
    ```
 
-4. **Run Scripts in Order**
+4. **Run Setup Scripts**
    ```bash
+   # Option 1: Quick deploy (clean + setup)
+   ./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-ClusterAPI.sh
+   
+   # Option 2: Step by step
    ./1-PreRequisites.sh    # Install tools
    ./2-PrepareProxmox.sh   # Prepare Proxmox infrastructure
    ./3-ClusterAPI.sh       # Deploy Kubernetes cluster
    ```
 
-5. **Cleanup (Optional)**
+5. **Cleanup Operations**
    ```bash
-   ./99-CleanProxmox.sh           # Interactive cleanup
-   ./99-CleanProxmox.sh --force   # Automated cleanup
+   ./99-CleanAll.sh           # Interactive cleanup (all resources)
+   ./99-CleanAll.sh -f        # Automated cleanup (all resources)
    ```
 
 ## Features
 
-- **POSIX Compatible**: Works with sh, bash, ash, dash
+- **POSIX Compatible**: Works with sh, bash, ash, dash shells
 - **Multi-Distribution**: Supports Arch, Debian/Ubuntu, Alpine Linux  
 - **Automated Setup**: Creates Proxmox users, tokens, and templates
 - **Security Focused**: Enhanced CPU security flags and proper permissions
 - **Centralized Config**: Single configuration file with tag-based management
 - **User-Friendly**: Command previews and interactive confirmations
-- **Professional Cleanup**: Safe resource management with batch operations
+- **Comprehensive Cleanup**: Complete environment reset including clusters and VMs
+- **One-Command Deploy**: Quick setup with automated cleanup and deployment
+
+## Usage Patterns
+
+### Fresh Installation
+```bash
+# Edit configuration first
+nano 0-Homelab.conf
+
+# Clean deploy everything
+./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-ClusterAPI.sh
+```
+
+### Development Cycle
+```bash
+# Reset environment
+./99-CleanAll.sh
+
+# Redeploy cluster only
+./3-ClusterAPI.sh
+```
+
+### Cleanup Only
+```bash
+# Remove all clusters and VMs
+./99-CleanAll.sh -f
+```

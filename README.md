@@ -46,9 +46,12 @@ Comprehensive Proxmox infrastructure setup:
 - **Template Tagging**: Adds management tags for easy identification
 
 ### 3-ClusterAPI.sh
-Deploys Kubernetes cluster:
+Deploys Kubernetes cluster with advanced networking:
 - Sets up Cluster API management cluster
 - Deploys Talos Kubernetes cluster on Proxmox
+- **VIP Configuration**: Configures Virtual IP for control plane high availability
+- **Strategic Patches**: Applies disk and network patches for both control plane and workers
+- **Enhanced Monitoring**: Monitors services instead of pods for better cluster readiness detection
 
 ### 99-CleanAll.sh
 Comprehensive cleanup utility for complete environment reset:
@@ -57,6 +60,14 @@ Comprehensive cleanup utility for complete environment reset:
 - **Proxmox Cleanup**: Removes VMs/templates by configured tag
 - **Safe Operations**: Interactive confirmation with force mode support
 - **Complete Removal**: Purges configurations and unreferenced disks
+
+## Network Configuration
+
+The cluster is configured with:
+- **Control Plane VIP**: `192.168.25.101` - Dedicated virtual IP for API server access
+- **Node IP Pool**: `192.168.25.102-105` - DHCP pool for control plane and worker nodes
+- **Strategic Separation**: VIP ensures consistent cluster endpoint regardless of node assignment
+- **High Availability**: VIP can float between control plane nodes for redundancy
 
 ## Quick Start
 
@@ -100,6 +111,9 @@ Comprehensive cleanup utility for complete environment reset:
 - **Automated Setup**: Creates Proxmox users, tokens, and templates
 - **Security Focused**: Enhanced CPU security flags and proper permissions
 - **Centralized Config**: Single configuration file with tag-based management
+- **High Availability**: VIP configuration for control plane endpoint stability
+- **Advanced Networking**: Strategic patches for network and disk configuration
+- **Smart Monitoring**: Service-based monitoring for better cluster readiness detection
 - **User-Friendly**: Command previews and interactive confirmations
 - **Comprehensive Cleanup**: Complete environment reset including clusters and VMs
 - **One-Command Deploy**: Quick setup with automated cleanup and deployment

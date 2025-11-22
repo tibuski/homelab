@@ -168,6 +168,8 @@ spec:
       numSockets: ${TEMPLATE_SOCKETS} 
       sourceNode: ${PROXMOX_SOURCENODE}
       templateID: ${TEMPLATE_VMID}
+      checks:
+          skipCloudInitStatus: true
       
 ---
 apiVersion: cluster.x-k8s.io/v1beta2

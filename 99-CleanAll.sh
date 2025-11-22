@@ -25,13 +25,16 @@ for arg in "$@"; do
             ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
-            echo "Find and destroy VMs/Templates with tag '${TEMPLATE_TAG}'"
+            echo "Cleanup script for homelab environment:"
+            echo "  - Delete clusterctl clusters"
+            echo "  - Delete kind clusters"
+            echo "  - Find and destroy Proxmox VMs/Templates with tag '${TEMPLATE_TAG}'"
             echo ""
             echo "OPTIONS:"
             echo "  -f, --force    Skip confirmation prompt and proceed with deletion"
             echo "  -h, --help     Show this help message"
             echo ""
-            echo "WARNING: This script will PERMANENTLY DELETE VMs and templates!"
+            echo "WARNING: This script will PERMANENTLY DELETE clusters, VMs and templates!"
             exit 0
             ;;
         *)
@@ -70,16 +73,17 @@ print_success() {
 check_ssh() {
     if ! command -v ssh >/dev/null 2>&1; then
         print_error "ssh command not found. This script requires SSH access to Proxmox."
-        exit 1
+        return 1
     fi
     
     print_info "Testing SSH connectivity to Proxmox host: ${PROXMOX_HOST}"
     if ! ssh -T -o ConnectTimeout=10 -o BatchMode=yes root@"${PROXMOX_HOST}" "echo 'Connection successful'" >/dev/null 2>&1; then
         print_error "Cannot connect to Proxmox host ${PROXMOX_HOST} via SSH."
         print_error "Please ensure SSH access is configured for root user."
-        exit 1
+        return 1
     fi
     print_success "SSH connectivity confirmed"
+    return 0
 }
 
 # Function to confirm deletion with user
@@ -96,11 +100,11 @@ confirm_deletion() {
     print_warning "WARNING: This will PERMANENTLY DELETE $resource_count resources!"
     print_warning "This action is IRREVERSIBLE!"
     echo
-    printf "Do you want to proceed? Type 'yes' to confirm: "
+    printf "Do you want to proceed? [y/N]: "
     read -r confirmation
     
     case "$confirmation" in
-        yes|YES)
+        y|Y|yes|YES)
             print_info "Proceeding with deletion..."
             return 0
             ;;
@@ -109,6 +113,120 @@ confirm_deletion() {
             return 1
             ;;
     esac
+}
+
+# Function to clean clusterctl clusters
+clean_clusterctl() {
+    print_info "Checking for clusterctl clusters..."
+    
+    # Check if clusterctl is available
+    if ! command -v clusterctl >/dev/null 2>&1; then
+        print_warning "clusterctl not found, skipping clusterctl cleanup"
+        return 0
+    fi
+    
+    # Get list of clusters
+    clusters=$(clusterctl get clusters -A -o name 2>/dev/null | grep -v "^NAME" | grep -v "^$" || true)
+    
+    if [ -z "$clusters" ]; then
+        print_info "No clusterctl clusters found"
+        return 0
+    fi
+    
+    cluster_count=$(echo "$clusters" | wc -l)
+    print_info "Found $cluster_count clusterctl cluster(s):"
+    echo "$clusters" | while read -r cluster; do
+        [ -n "$cluster" ] && printf "  - %s\n" "$cluster"
+    done
+    
+    # Confirm deletion if not in force mode
+    if [ "$FORCE_DELETE" = "false" ]; then
+        echo
+        print_warning "WARNING: This will DELETE all clusterctl clusters!"
+        printf "Do you want to proceed with clusterctl cleanup? [y/N]: "
+        read -r confirmation
+        
+        case "$confirmation" in
+            y|Y|yes|YES)
+                print_info "Proceeding with clusterctl cleanup..."
+                ;;
+            *)
+                print_info "Clusterctl cleanup cancelled by user."
+                return 0
+                ;;
+        esac
+    else
+        print_info "Force mode enabled - proceeding with clusterctl cleanup..."
+    fi
+    
+    # Delete clusters
+    echo "$clusters" | while read -r cluster; do
+        if [ -n "$cluster" ]; then
+            print_info "Deleting clusterctl cluster: $cluster"
+            if clusterctl delete cluster "$cluster" 2>/dev/null; then
+                print_success "Successfully deleted clusterctl cluster: $cluster"
+            else
+                print_error "Failed to delete clusterctl cluster: $cluster"
+            fi
+        fi
+    done
+}
+
+# Function to clean kind clusters
+clean_kind() {
+    print_info "Checking for kind clusters..."
+    
+    # Check if kind is available
+    if ! command -v kind >/dev/null 2>&1; then
+        print_warning "kind not found, skipping kind cleanup"
+        return 0
+    fi
+    
+    # Get list of clusters
+    clusters=$(kind get clusters 2>/dev/null || true)
+    
+    if [ -z "$clusters" ]; then
+        print_info "No kind clusters found"
+        return 0
+    fi
+    
+    cluster_count=$(echo "$clusters" | wc -l)
+    print_info "Found $cluster_count kind cluster(s):"
+    echo "$clusters" | while read -r cluster; do
+        [ -n "$cluster" ] && printf "  - %s\n" "$cluster"
+    done
+    
+    # Confirm deletion if not in force mode
+    if [ "$FORCE_DELETE" = "false" ]; then
+        echo
+        print_warning "WARNING: This will DELETE all kind clusters!"
+        printf "Do you want to proceed with kind cleanup? [y/N]: "
+        read -r confirmation
+        
+        case "$confirmation" in
+            y|Y|yes|YES)
+                print_info "Proceeding with kind cleanup..."
+                ;;
+            *)
+                print_info "Kind cleanup cancelled by user."
+                return 0
+                ;;
+        esac
+    else
+        print_info "Force mode enabled - proceeding with kind cleanup..."
+    fi
+    
+    # Delete clusters
+    echo "$clusters" | while read -r cluster; do
+        if [ -n "$cluster" ]; then
+            print_info "Deleting kind cluster: $cluster"
+            if kind delete cluster --name="$cluster" 2>/dev/null; then
+                print_success "Successfully deleted kind cluster: $cluster"
+            else
+                print_error "Failed to delete kind cluster: $cluster"
+            fi
+        fi
+    done
 }
 
 # Function to delete a VM or template
@@ -246,18 +364,39 @@ process_deletions() {
 
 # Main function
 main() {
-    print_info "Proxmox Cleanup Script"
+    print_info "Homelab Cleanup Script"
     print_info "======================"
+    print_info "This script will clean up:"
+    print_info "  1. Clusterctl clusters"
+    print_info "  2. Kind clusters"
+    print_info "  3. Proxmox VMs/Templates with tag: ${TEMPLATE_TAG}"
     print_info "Proxmox Host: ${PROXMOX_HOST}:${PROXMOX_PORT}"
-    print_info "Target Tag: ${TEMPLATE_TAG}"
     echo
     
-    # Check SSH connectivity
-    check_ssh
+    # Step 1: Clean clusterctl clusters
+    clean_clusterctl
+    echo
+    
+    # Step 2: Clean kind clusters
+    clean_kind
+    echo
+    
+    # Step 3: Clean Proxmox resources
+    print_info "Starting Proxmox cleanup..."
+    
+    # Check SSH connectivity first
+    if ! check_ssh; then
+        print_error "Skipping Proxmox cleanup due to SSH connectivity issues"
+        return 1
+    fi
     echo
     
     # Find and display resources
-    find_and_display_resources > "/tmp/find_output_$$"
+    if ! find_and_display_resources > "/tmp/find_output_$$"; then
+        print_info "No Proxmox resources to clean up"
+        rm -f "/tmp/find_output_$$" "/tmp/proxmox_scan_$$" "/tmp/proxmox_scan_$$.filtered"
+        return 0
+    fi
     
     # Extract file path and count from the last line of output
     result_line=$(tail -1 "/tmp/find_output_$$")
@@ -270,6 +409,7 @@ main() {
     
     # Check if any resources were found
     if [ "$filtered_file" = "NONE" ] || [ "$resource_count" = "0" ] || [ ! -f "$filtered_file" ]; then
+        print_info "No Proxmox resources found to clean up"
         rm -f "/tmp/proxmox_scan_$$" "/tmp/proxmox_scan_$$.filtered"
         return 0
     fi

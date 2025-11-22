@@ -49,9 +49,12 @@ else
 fi
 
 # Create clusterctl configuration directory if it doesn't exist
+print_info "Creating clusterctl configuration directory: "${CLUSTERCTL_CONFIG_PATH}""
 mkdir -p "${CLUSTERCTL_CONFIG_PATH}"
 
 # Create CAPI configuration for Proxmox Provider
+print_info "Creating Talos cluster configuration: "${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE}""
+
 cat <<EOF > "${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE}"
 # Providers
 providers:
@@ -72,34 +75,18 @@ PROXMOX_SECRET: "${PROXMOX_SECRET}"
 CLUSTERCTL_LOG_LEVEL: "4"
 EOF
 
-# Initialize CAPI with Proxmox, Talos providers and IPAM in-cluster
-clusterctl init \
-  --config ${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE} \
-  --infrastructure proxmox \
-  --bootstrap talos \
-  --control-plane talos \
-  --ipam in-cluster
-
-# Verify CAPI installation
-print_info "Verifying Cluster API provider installation..."
-print_info "You should see pods running for:"
-print_info "  • capi-system"
-print_info "  • capmox-system (Proxmox provider)"
-print_info "  • cabpt-system (Talos bootstrap)"
-print_info "  • cacppt-system (Talos control plane)"
-echo
-kubectl get pods -A
 
 # Create kubectl configurations directory
+print_info "Creating kubectl configuration directory: "${CLUSTERCTL_CONFIG_PATH}""
 mkdir -p "${KUBECTL_CONFIG_PATH}"
 
 # Note: Proxmox provider handles IP allocation through ProxmoxCluster spec
 # No separate IP pool resource needed
 
 # Create Talos cluster YAML configuration
-CLUSTER_FILE="${KUBECTL_CONFIG_PATH}/${CLUSTER_NAME}-cluster.yaml"
-print_info "Creating Talos cluster configuration: ${CLUSTER_FILE}"
-cat <<EOF > "${CLUSTER_FILE}"
+print_info "Creating Talos cluster configuration: "${KUBECTL_CONFIG_PATH}/${KUBECTL_CONFIG_FILE}"
+"
+cat <<EOF > "${KUBECTL_CONFIG_PATH}/${KUBECTL_CONFIG_FILE}"
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
@@ -265,8 +252,24 @@ EOF
 
 print_success "Cluster YAML files created successfully!"
 print_info "Generated files:"
-print_info "  • ${CLUSTER_FILE}"
+print_info "  • ${KUBECTL_CONFIG_FILE}"
+print_info "  • ${CLUSTERCTL_CONFIG_FILE}"
+
+
 echo
+# Initialize CAPI with Proxmox, Talos providers and IPAM in-cluster
+clusterctl init \
+  --config ${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE} \
+  --target-namespace ${CLUSTER_NAMESPACE} \
+  --infrastructure proxmox \
+  --bootstrap talos \
+  --control-plane talos \
+  --ipam in-cluster
+
+echo
+kubectl get pods -A
+
+
 
 # Check if cluster already exists and needs cleanup
 if kubectl get cluster "${CLUSTER_NAME}" -n "${CLUSTER_NAMESPACE}" >/dev/null 2>&1; then

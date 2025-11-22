@@ -95,28 +95,7 @@ mkdir -p "${KUBECTL_CONFIG_PATH}"
 print_info "Creating Talos cluster configuration: "${KUBECTL_CONFIG_PATH}/${KUBECTL_CONFIG_FILE}"
 "
 cat <<EOF > "${KUBECTL_CONFIG_PATH}/${KUBECTL_CONFIG_FILE}"
----
-apiVersion: cluster.x-k8s.io/v1beta2
-kind: Cluster
-metadata:
-  name: ${CLUSTER_NAME}
-  namespace: ${CLUSTER_NAMESPACE}
-spec:
-  clusterNetwork:
-    pods:
-      cidrBlocks:
-        - ${POD_CIDR}
-    services:
-      cidrBlocks:
-        - ${SERVICE_CIDR}
-  controlPlaneRef:
-    apiGroup: controlplane.cluster.x-k8s.io
-    kind: TalosControlPlane
-    name: talos-control-plane
-  infrastructureRef:
-    apiGroup: infrastructure.cluster.x-k8s.io
-    kind: ProxmoxCluster
-    name: ${PROXMOX_CLUSTER_NAME}
+
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: ProxmoxCluster
@@ -137,6 +116,21 @@ spec:
   dnsServers:
     - ${DNS_SERVERS}
 ---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: ${CLUSTER_NAMESPACE}
+spec:
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: TalosControlPlane
+    name: talos-control-plane
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ProxmoxCluster
+    name: ${PROXMOX_CLUSTER_NAME}
+---
 apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 kind: TalosControlPlane
 metadata:
@@ -152,6 +146,20 @@ spec:
   controlPlaneConfig:
     controlplane:
       generateType: controlplane
+      strategicPatches:
+        - |
+          machine:
+            install:
+              disk: /dev/sda
+              extraKernelArgs:
+                - "talos.interface=eth0=dhcp"
+                - "vip=${CONTROL_PLANE_ENDPOINT_IP}"
+            network:
+              interfaces:
+                - interface: "eth0"
+                  dhcp: true
+                  vip:
+                    ip: "${CONTROL_PLANE_ENDPOINT_IP}"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: ProxmoxMachineTemplate
@@ -227,7 +235,7 @@ spec:
       memoryMiB: ${TEMPLATE_MEMORY}
       disks:
         bootVolume:
-          disk: ${PROXMOX_SOURCENODE}:${TEMPLATE_VMID}
+          disk: ${TEMPLATE_DISK}
           sizeGb: ${TEMPLATE_DISK_SIZE}
       network:
         default:
@@ -243,6 +251,11 @@ spec:
   template:
     spec:
       generateType: worker
+      strategicPatches:
+        - |
+          machine:
+            install:
+              disk: /dev/sda
       configPatches:
         - op: add
           path: /machine/kubelet/extraArgs
@@ -271,6 +284,8 @@ print_info "  • ${CLUSTERCTL_CONFIG_FILE}"
 
 echo
 # Initialize CAPI with Proxmox, Talos providers and IPAM in-cluster
+print_info "Running : clusterctl init --config ${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE} --target-namespace ${CLUSTER_NAMESPACE} --infrastructure proxmox --bootstrap talos-bootstrap --control-plane talos-control-plane --ipam in-cluster"
+
 clusterctl init \
   --config ${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE} \
   --target-namespace ${CLUSTER_NAMESPACE} \
@@ -279,75 +294,24 @@ clusterctl init \
   --control-plane talos \
   --ipam in-cluster
 
-# Wait for all pods to be in Running state before proceeding
+# Watch services and wait for user confirmation
 echo
-print_info "Waiting for all pods to be in Running state..."
-while true; do
-    # Get pods that are not in Running, Succeeded, or Completed state
-    non_ready_pods=$(kubectl get pods -A --no-headers | grep -v -E "(Running|Succeeded|Completed)" | wc -l)
-    
-    if [ "$non_ready_pods" -eq 0 ]; then
-        print_success "All pods are now in Running state"
-        break
-    else
-        print_info "Waiting for $non_ready_pods pod(s) to be ready..."
-        sleep 5
-    fi
-done
-
-# Wait for webhook services to be ready (simplified check)
+print_info "Monitoring service status - Press Ctrl+C when all services are ready to continue..."
+echo "Watching services across all namespaces:"
 echo
-print_info "Waiting for Cluster API controllers to be ready..."
+watch -n 2 'kubectl get services -A'
 
-# Simple wait - just give the controllers some time to initialize
-sleep 30
+# Check available CRD versions before applying
+echo
+print_info "Checking available Talos CRD versions..."
+kubectl api-resources | grep -i talos || print_warning "No Talos CRDs found"
+echo
 
-# Check if basic cluster API resources are available
-if kubectl api-resources | grep -q "clusters.cluster.x-k8s.io" >/dev/null 2>&1; then
-    print_success "Cluster API resources are available"
-else
-    print_warning "Cluster API resources not fully ready, but proceeding..."
-fi
+print_info "Checking TalosControlPlane CRD versions..."
+kubectl get crd taloscontrolplanes.controlplane.cluster.x-k8s.io -o jsonpath='{.spec.versions[*].name}' 2>/dev/null | tr ' ' '\n' || print_warning "TalosControlPlane CRD not found"
+echo
 
-# Apply all kubectl configurations from the dedicated directory with retry logic
+# Apply all kubectl configurations from the dedicated directory
 echo
 print_info "Applying all Kubernetes configurations from ${KUBECTL_CONFIG_PATH}..."
-
-apply_success=false
-max_apply_attempts=5
-apply_attempt=0
-
-while [ "$apply_success" = false ] && [ "$apply_attempt" -lt "$max_apply_attempts" ]; do
-    apply_attempt=$((apply_attempt + 1))
-    
-    if [ "$apply_attempt" -gt 1 ]; then
-        print_info "Retrying kubectl apply (attempt $apply_attempt/$max_apply_attempts)..."
-        # Wait a bit longer between retries to allow webhook to fully initialize
-        sleep 10
-    fi
-    
-    if kubectl apply -f "${KUBECTL_CONFIG_PATH}" --request-timeout=${KUBECTL_APPLY_TIMEOUT} 2>/tmp/kubectl_apply_error.log; then
-        print_success "Successfully applied all Kubernetes configurations"
-        apply_success=true
-    else
-        # Check if the error is specifically about webhook connection
-        if grep -q "connect: connection refused" /tmp/kubectl_apply_error.log 2>/dev/null; then
-            print_warning "Webhook connection refused, waiting for webhook to be fully ready..."
-            if [ "$apply_attempt" -lt "$max_apply_attempts" ]; then
-                print_info "Will retry in 10 seconds..."
-            fi
-        else
-            print_error "kubectl apply failed with a different error:"
-            cat /tmp/kubectl_apply_error.log 2>/dev/null || echo "Could not read error log"
-            break
-        fi
-    fi
-done
-
-# Clean up temporary error log
-rm -f /tmp/kubectl_apply_error.log
-
-if [ "$apply_success" = false ]; then
-    print_error "Failed to apply configurations after $max_apply_attempts attempts"
-    exit 1
-fi
+kubectl apply -f "${KUBECTL_CONFIG_PATH}"

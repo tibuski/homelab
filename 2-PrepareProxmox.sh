@@ -1,13 +1,11 @@
 #!/bin/sh
 
-#!/bin/sh
-
 # Prepare Proxmox Secrets and templates for Talos and Kubernetes deployment
 # POSIX compliant
 #
 # PREREQUISITES:
 # - Talos ISO must be present in Proxmox ISO storage
-# - Download Talos ISO from: https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=metal&target=metal
+# - Download Talos ISO from: https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=nocloud&target=cloud
 # - Upload the ISO to your Proxmox storage (e.g., Data storage)
 # - Update TALOS_ISO_PATH variable in 0-Homelab.conf to match your storage path
 
@@ -42,10 +40,14 @@ print_success() {
     printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"
 }
 
+print_error() {
+    printf "${RED}[ERROR]${NC} %s\n" "$1"
+}
+
 # Display prerequisites
 print_info "Prerequisites Check:"
-print_warning "Talos ISO must be present in Proxmox ISO storage"
-print_info "Download from: https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=metal&target=metal"
+print_warning "Talos nocloud with QEMU agent ISO must be present in Proxmox ISO storage"
+print_info "Download from:https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=nocloud&target=cloud"
 print_info "Upload the ISO to your Proxmox storage and update TALOS_ISO_PATH in 0-Homelab.conf"
 echo
 
@@ -129,10 +131,26 @@ echo
 print_info "Creating Talos VM template on Proxmox host ${PROXMOX_HOST}..."
 
 # Check if template already exists
+echo "[QM] Checking if VM template ${TEMPLATE_VMID} already exists"
 if ssh root@"${PROXMOX_HOST}" "qm status ${TEMPLATE_VMID} >/dev/null 2>&1"; then
     print_success "Template VM ${TEMPLATE_VMID} already exists. Skipping creation."
 else
     print_info "Creating new VM template ${TEMPLATE_VMID}..."
+    
+    # Show all commands that will be sent to Proxmox with resolved variables
+    echo "[QM] The following exact commands will be executed on Proxmox host ${PROXMOX_HOST}:"
+    echo "[QM] qm create ${TEMPLATE_VMID} --name \"${TEMPLATE_NAME}\" --memory ${TEMPLATE_MEMORY} --cores ${TEMPLATE_CORES} --net0 virtio,bridge=${TEMPLATE_BRIDGE}"
+    if [ -n "${TEMPLATE_CPU_FLAGS}" ]; then
+        echo "[QM] qm set ${TEMPLATE_VMID} --cpu ${TEMPLATE_CPU},flags=${TEMPLATE_CPU_FLAGS}"
+    else
+        echo "[QM] qm set ${TEMPLATE_VMID} --cpu ${TEMPLATE_CPU}"
+    fi
+    echo "[QM] qm set ${TEMPLATE_VMID} --scsi0 ${TEMPLATE_STORAGE}:${TEMPLATE_DISK_SIZE} --boot order=scsi0 --scsihw virtio-scsi-single"
+    echo "[QM] qm set ${TEMPLATE_VMID} --ide2 ${TALOS_ISO_PATH},media=cdrom"
+    echo "[QM] qm set ${TEMPLATE_VMID} --agent enabled=1"
+    echo "[QM] qm set ${TEMPLATE_VMID} --tags ${TEMPLATE_TAG}"
+    echo "[QM] qm template ${TEMPLATE_VMID}"
+    echo
     
     # Create VM and configure it in a single SSH session
     ssh root@"${PROXMOX_HOST}" << PROXMOX_COMMANDS
@@ -143,6 +161,13 @@ else
             --cores ${TEMPLATE_CORES} \
             --net0 virtio,bridge=${TEMPLATE_BRIDGE}
         
+        # Set CPU type and flags
+        if [ -n "${TEMPLATE_CPU_FLAGS}" ]; then
+            qm set ${TEMPLATE_VMID} --cpu "${TEMPLATE_CPU},flags=${TEMPLATE_CPU_FLAGS}"
+        else
+            qm set ${TEMPLATE_VMID} --cpu ${TEMPLATE_CPU}
+        fi
+
         # Configure storage and boot
         qm set ${TEMPLATE_VMID} \
             --scsi0 ${TEMPLATE_STORAGE}:${TEMPLATE_DISK_SIZE} \
@@ -159,7 +184,7 @@ else
         
         # Add tags to template
         qm set ${TEMPLATE_VMID} \
-            --tags cluster-api-talos
+            --tags ${TEMPLATE_TAG}
         
         # Convert to template
         qm template ${TEMPLATE_VMID}

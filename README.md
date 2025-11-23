@@ -123,11 +123,29 @@ Cluster network settings:
    ./4-GetSecrets.sh        # Get kubeconfig and talosconfig
    ```
 
-6. **Cleanup Operations**
+6. **Deploy Load Balancer (optional)**
+   ```bash
+   cd traefik/
+   ./deploy.sh              # Deploy Traefik ingress controller
+   ```
+
+7. **Cleanup Operations**
    ```bash
    ./99-CleanAll.sh           # Interactive cleanup (all resources)
    ./99-CleanAll.sh -f        # Automated cleanup (all resources)
    ```
+
+## Components
+
+### Core Cluster
+- **Talos Linux**: Immutable Kubernetes OS
+- **Cluster API**: Declarative cluster lifecycle management
+- **MetalLB**: Load balancer for bare metal environments
+
+### Load Balancer (Optional)
+- **Traefik**: HTTP reverse proxy and load balancer
+- **IngressRoute**: Custom routing configuration
+- **Dashboard**: Web UI for traffic monitoring
 
 ## Features
 

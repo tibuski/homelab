@@ -1,0 +1,21 @@
+# Simple MetalLB Configuration for Homelab
+# Just the IP pool and L2 advertisement - no monitoring, no complex RBAC
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: homelab-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 192.168.25.105/32
+
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: homelab-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+  - homelab-pool

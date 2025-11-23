@@ -1,0 +1,31 @@
+# Simple IngressRoutes for Homelab
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: dashboard
+  namespace: traefik
+spec:
+  entryPoints:
+    - web
+  routes:
+  - match: Host(`dashboard.k8s.brichet.be`)
+    kind: Rule
+    services:
+    - name: api@internal
+      kind: TraefikService
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: whoami
+  namespace: traefik
+spec:
+  entryPoints:
+    - web
+  routes:
+  - match: Host(`whoami.k8s.brichet.be`)
+    kind: Rule
+    services:
+    - name: whoami
+      port: 80

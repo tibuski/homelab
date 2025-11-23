@@ -159,11 +159,6 @@ spec:
                 - name: qemu_guest_agent
                   parameters:
                     - "enabled=1"
-            kernel:
-              modules:
-                - name: qemu_guest_agent
-                  parameters:
-                    - "enabled=1"
             network:
               interfaces:
                 - interface: "eth0"
@@ -266,11 +261,6 @@ spec:
           machine:
             install:
               disk: /dev/sda
-            kernel:
-              modules:
-                - name: qemu_guest_agent
-                  parameters:
-                    - "enabled=1"
       configPatches:
         - op: add
           path: /machine/kubelet/extraArgs
@@ -299,22 +289,17 @@ print_info "  • ${CLUSTERCTL_CONFIG_FILE}"
 
 echo
 # Initialize CAPI with Proxmox, Talos providers and IPAM in-cluster
-print_info "Running : clusterctl init --config ${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE} --target-namespace ${CLUSTER_NAMESPACE} --infrastructure proxmox --bootstrap talos-bootstrap --control-plane talos-control-plane --ipam in-cluster"
+print_info "Running : clusterctl init --config ${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE} --target-namespace ${CLUSTER_NAMESPACE} --infrastructure proxmox --bootstrap talos --control-plane talos --ipam in-cluster"
+print_info "Note: Suppressing harmless unrecognized format warnings from cert-manager CRDs"
 
+# Filter out the harmless format warnings while keeping important output
 clusterctl init \
   --config ${CLUSTERCTL_CONFIG_PATH}/${CLUSTERCTL_CONFIG_FILE} \
   --target-namespace ${CLUSTER_NAMESPACE} \
   --infrastructure proxmox \
   --bootstrap talos \
   --control-plane talos \
-  --ipam in-cluster
-
-# Watch services and wait for user confirmation
-echo
-print_info "Monitoring service status - Press Ctrl+C when all services are ready to continue..."
-echo "Watching services across all namespaces:"
-echo
-watch -n 2 'kubectl get services -A'
+  --ipam in-cluster 2>&1 | grep -v "unrecognized format"
 
 # Check available CRD versions before applying
 echo
@@ -326,7 +311,68 @@ print_info "Checking TalosControlPlane CRD versions..."
 kubectl get crd taloscontrolplanes.controlplane.cluster.x-k8s.io -o jsonpath='{.spec.versions[*].name}' 2>/dev/null | tr ' ' '\n' || print_warning "TalosControlPlane CRD not found"
 echo
 
+# Wait for webhooks to be ready
+echo
+print_info "Waiting for Cluster API webhooks to be ready..."
+
+# Function to check if webhook is responding
+check_webhook_ready() {
+    # Try to get a non-existent ProxmoxCluster - if webhook is ready, we get a proper error, not connection refused
+    kubectl get proxmoxcluster non-existent-cluster 2>&1 | grep -v "connection refused" >/dev/null
+    return $?
+}
+
+# Wait for webhook to be ready with timeout
+webhook_timeout=300  # 5 minutes
+webhook_elapsed=0
+webhook_interval=10
+
+print_info "Checking webhook availability (timeout: ${webhook_timeout}s)..."
+
+while [ $webhook_elapsed -lt $webhook_timeout ]; do
+    if check_webhook_ready; then
+        print_success "Webhooks are ready!"
+        break
+    fi
+    
+    printf "."
+    sleep $webhook_interval
+    webhook_elapsed=$((webhook_elapsed + webhook_interval))
+done
+
+echo ""
+
+if [ $webhook_elapsed -ge $webhook_timeout ]; then
+    print_error "Timeout waiting for webhooks to be ready"
+    print_warning "You may need to wait longer or check cluster status manually"
+    print_info "Try running: kubectl get pods -A | grep webhook"
+    exit 1
+fi
+
+# Additional wait for all pods to be fully ready
+print_info "Waiting for all system pods to be ready..."
+kubectl wait --for=condition=Ready pods --all -A --timeout=180s || print_warning "Some pods may still be starting"
+
 # Apply all kubectl configurations from the dedicated directory
 echo
 print_info "Applying all Kubernetes configurations from ${KUBECTL_CONFIG_PATH}..."
 kubectl apply -f "${KUBECTL_CONFIG_PATH}"
+
+echo
+print_success "Cluster deployment initiated successfully!"
+echo
+print_info "Monitor deployment progress with these commands:"
+echo
+printf "  # Watch all cluster resources:\n"
+printf "  kubectl get machine -n ${CLUSTER_NAMESPACE} -w\n"
+echo
+printf "  # Watch all cluster resources:\n"
+printf "  kubectl get proxmoxmachine -n ${CLUSTER_NAMESPACE} -w\n"
+echo
+printf "  # View detailed cluster events:\n"
+printf "  kubectl get events -n ${CLUSTER_NAMESPACE} --sort-by='.lastTimestamp'\n"
+echo
+printf "  # Check Proxmox VMs being created:\n"
+printf "  # Log into Proxmox web interface: https://${PROXMOX_HOST}:${PROXMOX_PORT}\n"
+echo
+print_info "Once the cluster is 'Provisioned', run ./4-GetSecrets.sh to retrieve credentials"

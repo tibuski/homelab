@@ -73,9 +73,9 @@ fi
 PROXMOX_FULL_USER="${PROXMOX_USER}@pve"
 
 # Check if user exists and create if needed
-if ! ssh root@"${PROXMOX_HOST}" "pveum user list | grep -q '${PROXMOX_FULL_USER}'"; then
+if ! ssh -q root@"${PROXMOX_HOST}" "pveum user list | grep -q '${PROXMOX_FULL_USER}'"; then
     print_info "Creating Proxmox user ${PROXMOX_FULL_USER}..."
-    ssh root@"${PROXMOX_HOST}" << PROXMOX_USER_SETUP
+    ssh -q root@"${PROXMOX_HOST}" << PROXMOX_USER_SETUP
         # Create user
         pveum user add ${PROXMOX_FULL_USER}
         
@@ -101,9 +101,9 @@ else
     print_success "Proxmox user ${PROXMOX_FULL_USER} already exists"
     
     # Check if token exists
-    if ! ssh root@"${PROXMOX_HOST}" "pveum user token list ${PROXMOX_FULL_USER} 2>/dev/null | grep -q '${PROXMOX_TOKEN_NAME}'"; then
+    if ! ssh -q root@"${PROXMOX_HOST}" "pveum user token list ${PROXMOX_FULL_USER} 2>/dev/null | grep -q '${PROXMOX_TOKEN_NAME}'"; then
         print_info "Creating API token for user ${PROXMOX_FULL_USER}..."
-        ssh root@"${PROXMOX_HOST}" << TOKEN_CREATE
+        ssh -q root@"${PROXMOX_HOST}" << TOKEN_CREATE
             echo "============================================"
             echo "Creating API token..."
             pveum user token add ${PROXMOX_FULL_USER} ${PROXMOX_TOKEN_NAME} -privsep 0
@@ -132,7 +132,7 @@ print_info "Creating Talos VM template on Proxmox host ${PROXMOX_HOST}..."
 
 # Check if template already exists
 echo "[QM] Checking if VM template ${TEMPLATE_VMID} already exists"
-if ssh root@"${PROXMOX_HOST}" "qm status ${TEMPLATE_VMID} >/dev/null 2>&1"; then
+if ssh -q root@"${PROXMOX_HOST}" "qm status ${TEMPLATE_VMID} >/dev/null 2>&1"; then
     print_success "Template VM ${TEMPLATE_VMID} already exists. Skipping creation."
 else
     print_info "Creating new VM template ${TEMPLATE_VMID}..."
@@ -153,7 +153,7 @@ else
     echo
     
     # Create VM and configure it in a single SSH session
-    ssh root@"${PROXMOX_HOST}" << PROXMOX_COMMANDS
+    ssh -q root@"${PROXMOX_HOST}" << PROXMOX_COMMANDS
         # Create VM
         qm create ${TEMPLATE_VMID} \
             --name "${TEMPLATE_NAME}" \

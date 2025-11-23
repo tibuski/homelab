@@ -89,10 +89,9 @@ Cluster network settings:
 ## Quick Start
 
 1. **Download Talos ISO**
-   ```bash
-   # Download nocloud ISO with QEMU guest agent support
-   https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=nocloud&target=cloud"
-   ```
+   
+   Download nocloud ISO with QEMU guest agent support:
+   [Talos Factory - nocloud with QEMU guest agent](https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=nocloud&target=cloud)
 
 2. **Upload ISO to Proxmox**
    - Upload the ISO to your Proxmox storage

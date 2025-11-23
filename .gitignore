@@ -1,3 +1,7 @@
+# Secrets and sensitive configuration files
+0-Homelab.secrets
+*.secrets
+
 # Configuration files with sensitive data
 *.yaml
 *.yml
@@ -5,6 +9,7 @@
 # Cluster API and Kubernetes config files
 clusterctl.yaml
 kubeconfig*
+talos-configs/
 
 # Temporary files
 *.tmp

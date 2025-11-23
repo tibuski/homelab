@@ -91,7 +91,11 @@ The cluster is configured with:
 
 3. **Configure Settings**
    ```bash
-   # Edit configuration with your Proxmox details
+   # Copy secrets template and add your API secret
+   cp 0-Homelab.secrets.template 0-Homelab.secrets
+   nano 0-Homelab.secrets  # Add your PROXMOX_SECRET here
+   
+   # Edit main configuration with your Proxmox details
    nano 0-Homelab.conf
    ```
 
@@ -131,8 +135,10 @@ The cluster is configured with:
 
 ### Fresh Installation
 ```bash
-# Edit configuration first
-nano 0-Homelab.conf
+# Setup secrets and configuration first
+cp 0-Homelab.secrets.template 0-Homelab.secrets
+nano 0-Homelab.secrets  # Add your PROXMOX_SECRET
+nano 0-Homelab.conf     # Edit other settings
 
 # Clean deploy everything
 ./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh && ./4-GetSecrets.sh

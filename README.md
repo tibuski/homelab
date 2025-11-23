@@ -6,7 +6,7 @@ Automated POSIX shell scripts to deploy a Kubernetes cluster on Proxmox using Cl
 
 Clean setup and deploy in one command:
 ```bash
-./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-ClusterAPI.sh
+./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh && ./4-GetSecrets.sh
 ```
 
 ## Prerequisites
@@ -45,13 +45,21 @@ Comprehensive Proxmox infrastructure setup:
 - **Command Logging**: Shows exact qm commands before execution
 - **Template Tagging**: Adds management tags for easy identification
 
-### 3-ClusterAPI.sh
+### 3-DeployCluster.sh
 Deploys Kubernetes cluster with advanced networking:
 - Sets up Cluster API management cluster
 - Deploys Talos Kubernetes cluster on Proxmox
 - **VIP Configuration**: Configures Virtual IP for control plane high availability
 - **Strategic Patches**: Applies disk and network patches for both control plane and workers
 - **Enhanced Monitoring**: Monitors services instead of pods for better cluster readiness detection
+
+### 4-GetSecrets.sh
+Retrieves cluster credentials and provides usage examples:
+- **Kubeconfig Retrieval**: Extracts kubeconfig from Cluster API secrets
+- **Talosconfig Retrieval**: Extracts talosconfig from Cluster API secrets
+- **Connectivity Testing**: Validates cluster accessibility
+- **Usage Examples**: Provides ready-to-use commands for cluster management
+- **Independence Verification**: Confirms cluster is fully functional on Proxmox
 
 ### 99-CleanAll.sh
 Comprehensive cleanup utility for complete environment reset:
@@ -90,12 +98,13 @@ The cluster is configured with:
 4. **Run Setup Scripts**
    ```bash
    # Option 1: Quick deploy (clean + setup)
-   ./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-ClusterAPI.sh
+   ./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh
    
    # Option 2: Step by step
-   ./1-PreRequisites.sh    # Install tools
-   ./2-PrepareProxmox.sh   # Prepare Proxmox infrastructure
-   ./3-ClusterAPI.sh       # Deploy Kubernetes cluster
+   ./1-PreRequisites.sh     # Install tools
+   ./2-PrepareProxmox.sh    # Prepare Proxmox infrastructure
+   ./3-DeployCluster.sh     # Deploy Kubernetes cluster
+   ./4-GetSecrets.sh        # Retrieve cluster credentials
    ```
 
 5. **Cleanup Operations**
@@ -126,7 +135,7 @@ The cluster is configured with:
 nano 0-Homelab.conf
 
 # Clean deploy everything
-./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-ClusterAPI.sh
+./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh && ./4-GetSecrets.sh
 ```
 
 ### Development Cycle
@@ -135,7 +144,7 @@ nano 0-Homelab.conf
 ./99-CleanAll.sh
 
 # Redeploy cluster only
-./3-ClusterAPI.sh
+./3-DeployCluster.sh && ./4-GetSecrets.sh
 ```
 
 ### Cleanup Only

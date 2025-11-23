@@ -47,51 +47,51 @@ Installs Kubernetes tools with user confirmation:
 Features auto-detection of package managers and init systems.
 
 ### 2-PrepareProxmox.sh
-Comprehensive Proxmox infrastructure setup:
-- **Automated User Management**: Creates API user and token with proper permissions
-- **VM Template Creation**: Creates optimized Talos template with CPU flags
-- **Security Enhanced**: Configures CPU security flags (AES, PCID, Spectre mitigations)
-- **Command Logging**: Shows exact qm commands before execution
-- **Template Tagging**: Adds management tags for easy identification
+Proxmox infrastructure setup:
+- Creates API user and token with permissions
+- Creates VM template from Talos ISO
+- Configures CPU security flags (AES, PCID, Spectre mitigations)
+- Shows qm commands before execution
+- Tags template for identification
 
 ### 3-DeployCluster.sh
-Deploys Kubernetes cluster with advanced networking:
-- Sets up Cluster API management cluster
-- Deploys Talos Kubernetes cluster on Proxmox
-- **VIP Configuration**: Configures Virtual IP for control plane high availability
-- **Strategic Patches**: Applies disk and network patches for both control plane and workers
-- **Enhanced Monitoring**: Monitors services instead of pods for better cluster readiness detection
+Deploys Kubernetes cluster:
+- Sets up Cluster API management cluster using kind
+- Creates Talos Kubernetes cluster on Proxmox VMs
+- Configures Virtual IP for control plane
+- Applies disk and network patches to nodes
+- Monitors cluster readiness
 
 ### 4-GetSecrets.sh
-Retrieves cluster credentials and provides usage examples:
-- **Kubeconfig Retrieval**: Extracts kubeconfig from Cluster API secrets
-- **Talosconfig Retrieval**: Extracts talosconfig from Cluster API secrets
-- **Connectivity Testing**: Validates cluster accessibility
-- **Usage Examples**: Provides ready-to-use commands for cluster management
-- **Independence Verification**: Confirms cluster is fully functional on Proxmox
+Retrieves cluster credentials:
+- Extracts kubeconfig from Cluster API secrets
+- Extracts talosconfig from Cluster API secrets  
+- Tests connectivity to cluster
+- Provides usage commands
+- Verifies cluster independence from management cluster
 
 ### 99-CleanAll.sh
-Comprehensive cleanup utility for complete environment reset:
-- **Clusterctl Cleanup**: Removes all clusterctl-managed clusters
-- **Kind Cleanup**: Deletes all local kind clusters
-- **Proxmox Cleanup**: Removes VMs/templates by configured tag
-- **Safe Operations**: Interactive confirmation with force mode support
-- **Complete Removal**: Purges configurations and unreferenced disks
+Cleanup utility:
+- Removes clusterctl-managed clusters
+- Deletes kind clusters
+- Removes VMs/templates by tag
+- Interactive confirmation or force mode
+- Removes unreferenced disks
 
 ## Network Configuration
 
-The cluster is configured with:
-- **Control Plane VIP**: `192.168.25.101` - Dedicated virtual IP for API server access
-- **Node IP Pool**: `192.168.25.102-105` - DHCP pool for control plane and worker nodes
-- **Strategic Separation**: VIP ensures consistent cluster endpoint regardless of node assignment
-- **High Availability**: VIP can float between control plane nodes for redundancy
+Cluster network settings:
+- Control Plane VIP: Uses `CONTROL_PLANE_ENDPOINT_IP` variable
+- Node IP Pool: Uses `IP_POOL_START` to `IP_POOL_END` range
+- Gateway: Uses `GATEWAY` variable
+- DNS: Uses `DNS_SERVERS` variable
 
 ## Quick Start
 
 1. **Download Talos ISO**
    ```bash
    # Download nocloud ISO with QEMU guest agent support
-   wget "https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=nocloud&target=cloud"
+   https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=nocloud&target=cloud"
    ```
 
 2. **Upload ISO to Proxmox**

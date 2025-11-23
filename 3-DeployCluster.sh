@@ -154,6 +154,16 @@ spec:
               extraKernelArgs:
                 - "talos.interface=eth0=dhcp"
                 - "vip=${CONTROL_PLANE_ENDPOINT_IP}"
+            kernel:
+              modules:
+                - name: qemu_guest_agent
+                  parameters:
+                    - "enabled=1"
+            kernel:
+              modules:
+                - name: qemu_guest_agent
+                  parameters:
+                    - "enabled=1"
             network:
               interfaces:
                 - interface: "eth0"
@@ -256,6 +266,11 @@ spec:
           machine:
             install:
               disk: /dev/sda
+            kernel:
+              modules:
+                - name: qemu_guest_agent
+                  parameters:
+                    - "enabled=1"
       configPatches:
         - op: add
           path: /machine/kubelet/extraArgs

@@ -2,13 +2,9 @@
 0-Homelab.secrets
 *.secrets
 
-# Configuration files with sensitive data
-*.yaml
-*.yml
-
-# Cluster API and Kubernetes config files
-clusterctl.yaml
-kubeconfig*
+# Generated configuration directories (created by scripts)
+clusterctl-configs/
+kubectl-configs/
 talos-configs/
 
 # Temporary files

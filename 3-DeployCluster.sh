@@ -241,6 +241,9 @@ spec:
         default:
           bridge: vmbr0
           model: virtio
+      checks:
+          skipCloudInitStatus: true
+          skipQemuGuestAgent: true
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: TalosConfigTemplate

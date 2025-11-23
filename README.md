@@ -2,11 +2,20 @@
 
 Automated POSIX shell scripts to deploy a Kubernetes cluster on Proxmox using Cluster API and Talos Linux.
 
+## Credits
+
+This project was inspired by [Quentin Joly's excellent guide](https://une-tasse-de.cafe/blog/talos-capi-proxmox/) on deploying Talos with Cluster API on Proxmox. His detailed walkthrough provided the foundation for these automation scripts.
+
 ## Quick Deploy
 
-Clean setup and deploy in one command:
+Clean setup and deploy cluster:
 ```bash
-./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh && ./4-GetSecrets.sh
+./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh
+```
+
+Once cluster is ready, retrieve credentials:
+```bash
+./4-GetSecrets.sh
 ```
 
 ## Prerequisites
@@ -99,7 +108,7 @@ The cluster is configured with:
    nano 0-Homelab.conf
    ```
 
-4. **Run Setup Scripts**
+4. **Deploy Cluster**
    ```bash
    # Option 1: Quick deploy (clean + setup)
    ./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh
@@ -107,11 +116,15 @@ The cluster is configured with:
    # Option 2: Step by step
    ./1-PreRequisites.sh     # Install tools
    ./2-PrepareProxmox.sh    # Prepare Proxmox infrastructure
-   ./3-DeployCluster.sh     # Deploy Kubernetes cluster
-   ./4-GetSecrets.sh        # Retrieve cluster credentials
+   ./3-DeployCluster.sh     # Deploy Kubernetes cluster (wait for completion)
    ```
 
-5. **Cleanup Operations**
+5. **Retrieve Cluster Credentials (after cluster is ready)**
+   ```bash
+   ./4-GetSecrets.sh        # Get kubeconfig and talosconfig
+   ```
+
+6. **Cleanup Operations**
    ```bash
    ./99-CleanAll.sh           # Interactive cleanup (all resources)
    ./99-CleanAll.sh -f        # Automated cleanup (all resources)
@@ -140,8 +153,11 @@ cp 0-Homelab.secrets.template 0-Homelab.secrets
 nano 0-Homelab.secrets  # Add your PROXMOX_SECRET
 nano 0-Homelab.conf     # Edit other settings
 
-# Clean deploy everything
-./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh && ./4-GetSecrets.sh
+# Deploy cluster infrastructure
+./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh
+
+# Wait for cluster to be ready, then get credentials
+./4-GetSecrets.sh
 ```
 
 ### Development Cycle
@@ -149,8 +165,11 @@ nano 0-Homelab.conf     # Edit other settings
 # Reset environment
 ./99-CleanAll.sh
 
-# Redeploy cluster only
-./3-DeployCluster.sh && ./4-GetSecrets.sh
+# Redeploy cluster
+./3-DeployCluster.sh
+
+# Once ready, get credentials
+./4-GetSecrets.sh
 ```
 
 ### Cleanup Only

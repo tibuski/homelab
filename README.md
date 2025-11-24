@@ -23,7 +23,7 @@ Once cluster is ready, retrieve credentials:
 - Linux system (Arch, Debian/Ubuntu, or Alpine)
 - Docker installed and running
 - Proxmox VE server with SSH root access
-- Talos nocloud ISO with QEMU guest agent
+- Internet access for Talos factory image download during VM deployment
 
 ## Scripts Overview
 
@@ -36,6 +36,8 @@ Key settings:
 - `PROXMOX_SECRET`: API token secret (generated automatically)
 - `TEMPLATE_VMID`: VM template ID (default: 9000)
 - `TEMPLATE_TAG`: VM identification tag for management
+- `TALOS_FACTORY_IMAGE`: Factory image URL with QEMU guest agent (pre-configured)
+- `TALOS_ISO_PATH`: Talos ISO for template creation (fallback method)
 
 ### 1-PreRequisites.sh
 Installs Kubernetes tools with user confirmation:
@@ -49,18 +51,21 @@ Features auto-detection of package managers and init systems.
 ### 2-PrepareProxmox.sh
 Proxmox infrastructure setup:
 - Creates API user and token with permissions
-- Creates VM template from Talos ISO
+- Creates VM template from Talos ISO (used as base template)
 - Configures CPU security flags (AES, PCID, Spectre mitigations)
 - Shows qm commands before execution
 - Tags template for identification
+- Note: Actual VMs use factory images with QEMU guest agent pre-installed
 
 ### 3-DeployCluster.sh
 Deploys Kubernetes cluster:
 - Sets up Cluster API management cluster using kind
-- Creates Talos Kubernetes cluster on Proxmox VMs
+- Creates Talos Kubernetes cluster on Proxmox VMs using factory images
+- Downloads factory images with QEMU guest agent during VM installation
 - Configures Virtual IP for control plane
 - Applies disk and network patches to nodes
 - Monitors cluster readiness
+- Provides logging commands for troubleshooting VM creation and Proxmox API calls
 
 ### 4-GetSecrets.sh
 Retrieves cluster credentials:
@@ -90,12 +95,13 @@ Cluster network settings:
 
 1. **Download Talos ISO**
    
-   Download nocloud ISO with QEMU guest agent support:
-   [Talos Factory - nocloud with QEMU guest agent](https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=nocloud&target=cloud)
+   The cluster uses pre-built Talos factory images with QEMU guest agent automatically downloaded during VM deployment. No manual ISO download required!
+   
+   Current factory image: `factory.talos.dev/nocloud-installer/ce4c980550dd2ab1b17bbf2b08801c7eb59418eafe8f279833297925d67c7515:v1.11.5`
 
-2. **Upload ISO to Proxmox**
-   - Upload the ISO to your Proxmox storage
-   - Update `TALOS_ISO_PATH` in configuration file
+   - Download nocloud ISO with Guest Agent: [Talos Downloads](https://factory.talos.dev/?arch=amd64&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=nocloud&target=cloud)
+   - Upload to Proxmox storage and update `TALOS_ISO_PATH` in 0-Homelab.conf
+   - Note down the Initial Installation factory link and put it in the variable `TALOS_FACTORY_IMAGE`
 
 3. **Configure Settings**
    ```bash
@@ -147,6 +153,26 @@ Cluster network settings:
 - **IngressRoute**: Custom routing configuration
 - **Dashboard**: Web UI for traffic monitoring
 
+## Monitoring and Troubleshooting
+
+After running `./3-DeployCluster.sh`, use these commands to monitor cluster deployment:
+
+```bash
+# Follow Proxmox provider logs (VM creation and API calls)
+kubectl --context kind-management logs -f -n default -l control-plane=controller-manager | grep capmox
+
+# Follow Talos bootstrap provider logs (configuration issues)
+kubectl --context kind-management logs -f -n default -l control-plane=controller-manager | grep cabpt
+
+# Check machine bootstrap status
+kubectl get machine -n default -o wide
+kubectl describe machine -n default
+
+# Check cluster status
+kubectl get cluster -n default
+kubectl get proxmoxcluster -n default
+```
+
 ## Features
 
 - **POSIX Compatible**: Works with sh, bash, ash, dash shells
@@ -160,6 +186,8 @@ Cluster network settings:
 - **User-Friendly**: Command previews and interactive confirmations
 - **Comprehensive Cleanup**: Complete environment reset including clusters and VMs
 - **One-Command Deploy**: Quick setup with automated cleanup and deployment
+- **Factory Images**: Modern approach using pre-built images with QEMU guest agent
+- **Comprehensive Logging**: Built-in commands for monitoring VM creation and troubleshooting
 
 ## Usage Patterns
 
@@ -172,6 +200,9 @@ nano 0-Homelab.conf     # Edit other settings
 
 # Deploy cluster infrastructure
 ./99-CleanAll.sh -f && ./1-PreRequisites.sh && ./2-PrepareProxmox.sh && ./3-DeployCluster.sh
+
+# Monitor deployment progress (optional)
+kubectl --context kind-management logs -f -n default -l control-plane=controller-manager | grep capmox
 
 # Wait for cluster to be ready, then get credentials
 ./4-GetSecrets.sh

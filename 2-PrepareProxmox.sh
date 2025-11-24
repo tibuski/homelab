@@ -49,6 +49,7 @@ print_info "Prerequisites Check:"
 print_warning "Talos nocloud with QEMU agent ISO must be present in Proxmox ISO storage"
 print_info "Download from:https://factory.talos.dev/?arch=amd64&cmdline-set=true&extensions=-&extensions=siderolabs%2Fqemu-guest-agent&platform=nocloud&target=cloud"
 print_info "Upload the ISO to your Proxmox storage and update TALOS_ISO_PATH in 0-Homelab.conf"
+print_info "Check if a newer version of TALOS_QEMU_GUEST_AGENT_URL is available at https://github.com/siderolabs/extensions/pkgs/container/qemu-guest-agent/versions"
 echo
 
 print_info "Using configuration from 0-Homelab.conf"

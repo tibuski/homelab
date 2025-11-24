@@ -78,8 +78,14 @@ get_kubeconfig() {
     
     if ! kubectl get secret "${kubeconfig_secret_name}" -n "${CLUSTER_NAMESPACE}" >/dev/null 2>&1; then
         print_error "Kubeconfig secret '${kubeconfig_secret_name}' not found"
-        print_error "The cluster may not be fully provisioned yet"
-        return 1
+        print_error "The cluster is not ready yet."
+        echo
+        print_info "Please wait for the cluster to be fully provisioned and try again."
+        print_info "You can monitor progress with:"
+        printf "  kubectl get cluster ${CLUSTER_NAME} -n ${CLUSTER_NAMESPACE}\n"
+        printf "  kubectl get machine -n ${CLUSTER_NAMESPACE}\n"
+        echo
+        exit 1
     fi
     
     # Extract kubeconfig from secret
@@ -121,8 +127,14 @@ get_talosconfig() {
     
     if ! kubectl get secret "${talosconfig_secret_name}" -n "${CLUSTER_NAMESPACE}" >/dev/null 2>&1; then
         print_error "Talosconfig secret '${talosconfig_secret_name}' not found"
-        print_error "The cluster may not be fully provisioned yet"
-        return 1
+        print_error "The cluster is not ready yet."
+        echo
+        print_info "Please wait for the cluster to be fully provisioned and try again."
+        print_info "You can monitor progress with:"
+        printf "  kubectl get cluster ${CLUSTER_NAME} -n ${CLUSTER_NAMESPACE}\n"
+        printf "  kubectl get machine -n ${CLUSTER_NAMESPACE}\n"
+        echo
+        exit 1
     fi
     
     # Extract talosconfig from secret

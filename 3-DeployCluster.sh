@@ -151,6 +151,7 @@ spec:
           machine:
             install:
               disk: /dev/sda
+              image: ${TALOS_FACTORY_IMAGE}
               extraKernelArgs:
                 - "talos.interface=eth0=dhcp"
                 - "vip=${CONTROL_PLANE_ENDPOINT_IP}"
@@ -259,6 +260,7 @@ spec:
           machine:
             install:
               disk: /dev/sda
+              image: ${TALOS_FACTORY_IMAGE}
       configPatches:
         - op: add
           path: /machine/kubelet/extraArgs
@@ -359,16 +361,20 @@ kubectl apply -f "${KUBECTL_CONFIG_PATH}"
 echo
 print_success "Cluster deployment initiated successfully!"
 echo
-print_info "Monitor deployment progress with these commands:"
+print_info "To follow logs of commands sent to Proxmox:"
+printf "  # Find all CAPI provider deployments:\n"
+printf "  kubectl get deployments -A | grep -E '(proxmox|talos|capi)'\n"
+printf "  kubectl get pods -A | grep -E '(proxmox|talos|capi)'\n"
 echo
-printf "  # Watch all cluster resources:\n"
-printf "  kubectl get machine -n ${CLUSTER_NAMESPACE} -w\n"
+printf "  # Follow Proxmox provider logs (shows VM creation and Proxmox API calls):\n"
+printf "  kubectl --context kind-${MANAGEMENT_CLUSTER_NAME} logs -f -n default -l control-plane=controller-manager | grep capmox\n"
 echo
-printf "  # Watch all cluster resources:\n"
-printf "  kubectl get proxmoxmachine -n ${CLUSTER_NAMESPACE} -w\n"
+printf "  # Follow Talos bootstrap provider logs (for extension/configuration issues):\n"
+printf "  kubectl --context kind-${MANAGEMENT_CLUSTER_NAME} logs -f -n default -l control-plane=controller-manager | grep cabpt\n"
 echo
-printf "  # View detailed cluster events:\n"
-printf "  kubectl get events -n ${CLUSTER_NAMESPACE} --sort-by='.lastTimestamp'\n"
+printf "  # Check machine bootstrap status:\n"
+printf "  kubectl get machine -n ${CLUSTER_NAMESPACE} -o wide\n"
+printf "  kubectl describe machine -n ${CLUSTER_NAMESPACE}\n"
 echo
 printf "  # Check Proxmox VMs being created:\n"
 printf "  # Log into Proxmox web interface: https://${PROXMOX_HOST}:${PROXMOX_PORT}\n"

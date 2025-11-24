@@ -139,7 +139,7 @@ else
     
     # Show all commands that will be sent to Proxmox with resolved variables
     echo "[QM] The following exact commands will be executed on Proxmox host ${PROXMOX_HOST}:"
-    echo "[QM] qm create ${TEMPLATE_VMID} --name \"${TEMPLATE_NAME}\" --memory ${TEMPLATE_MEMORY} --cores ${TEMPLATE_CORES} --net0 virtio,bridge=${TEMPLATE_BRIDGE}"
+    echo "[QM] qm create ${TEMPLATE_VMID} --name \"${TEMPLATE_NAME}\" --memory ${TEMPLATE_MEMORY} --cores ${TEMPLATE_CORES} --net0 virtio,bridge=${TEMPLATE_BRIDGE} --onboot ${TEMPLATE_ONBOOT}"
     if [ -n "${TEMPLATE_CPU_FLAGS}" ]; then
         echo "[QM] qm set ${TEMPLATE_VMID} --cpu ${TEMPLATE_CPU},flags=${TEMPLATE_CPU_FLAGS}"
     else
@@ -149,6 +149,7 @@ else
     echo "[QM] qm set ${TEMPLATE_VMID} --ide2 ${TALOS_ISO_PATH},media=cdrom"
     echo "[QM] qm set ${TEMPLATE_VMID} --agent enabled=1"
     echo "[QM] qm set ${TEMPLATE_VMID} --tags ${TEMPLATE_TAG}"
+    echo "[QM} qm set ${TEMPLATE_VMID} --onboot ${TEMPLATE_ONBOOT}"
     echo "[QM] qm template ${TEMPLATE_VMID}"
     echo
     
@@ -159,7 +160,8 @@ else
             --name "${TEMPLATE_NAME}" \
             --memory ${TEMPLATE_MEMORY} \
             --cores ${TEMPLATE_CORES} \
-            --net0 virtio,bridge=${TEMPLATE_BRIDGE}
+            --net0 virtio,bridge=${TEMPLATE_BRIDGE} \
+            --onboot ${TEMPLATE_ONBOOT}
         
         # Set CPU type and flags
         if [ -n "${TEMPLATE_CPU_FLAGS}" ]; then
